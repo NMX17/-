@@ -1,0 +1,55 @@
+import jieba
+from matplotlib import pyplot as plt
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.model_selection import train_test_split
+import pandas as pd
+from gensim.corpora.dictionary import Dictionary
+from gensim.models.hdpmodel import HdpModel
+from gensim.utils import simple_preprocess
+from wordcloud import WordCloud
+from joblib import dump
+
+data =pd.read_excel("./text.xlsx")
+df = pd.DataFrame(data)
+
+#去标点和停用词
+def remove_stopwords(text):
+    with open('stopwords.txt','r',encoding='utf-8') as f:
+        stopwords = [line.strip() for line in f.readlines()]
+    #对句子进行分词
+    words = jieba.cut(text)
+    #过滤停用词
+    words_without_stopwords = [word for word in words if word not in stopwords]
+    #重新拼接出句子
+    return " ".join(words_without_stopwords)
+df['text'] = df['text'].apply(remove_stopwords)
+
+# 划分训练集和测试集
+X = df.iloc[1:,1]
+Y = df.iloc[1:,-1]
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=25)
+
+# 分词函数
+text = df['text']
+def tokenize_text(text):
+    return jieba.cut(text)
+print(text)
+
+# 向量化文本
+vectorizer = TfidfVectorizer(tokenizer=tokenize_text)
+X_train_vec = vectorizer.fit_transform(X_train)
+X_test_vec = vectorizer.transform(X_test)
+
+# 训练朴素贝叶斯分类器
+classifier = MultinomialNB()
+classifier.fit(X_train_vec, y_train)
+
+# 保存模型和向量化器到指定文件夹下
+dump(classifier,'./naive_bayes_model.model')
+dump(vectorizer,'./tfidf_vectorizer.model')
+
+# 预测并评估
+y_pred = classifier.predict(X_test_vec)
+accuracy = (y_pred == y_test).mean()
+print(f"准确率: {accuracy}")
