@@ -1,0 +1,37 @@
+# 绘制正面评价词云图
+positive_texts = df[df['label'] == 1]['text']# 根据你的数据中表示情感标签的列名进行调整，这里假设为'label'
+positive_text = " ".join(positive_texts)
+positive_mask = plt.imread(r"./pos.jpg")
+positive_wordcloud = WordCloud(mask=positive_mask,background_color='white',font_path='C:/Windows/Fonts/simkai.ttf').generate(positive_text)
+plt.imshow(positive_wordcloud)
+plt.axis("off")
+plt.title("Positive Reviews Word Cloud")
+plt.show()
+
+# 绘制负面评价词云图
+negative_texts = df[df['label'] == 0]['text']  # 根据你的数据中表示情感标签的列名进行调整，这里假设为'label'
+negative_text = " ".join(negative_texts)
+negative_mask = plt.imread(r"./neg.jpg")
+negative_wordcloud = WordCloud(mask=negative_mask,background_color='white',font_path='C:/Windows/Fonts/simkai.ttf').generate(negative_text)
+plt.imshow(negative_wordcloud)
+plt.axis("off")
+plt.title("Negative Reviews Word Cloud")
+plt.show()
+
+# 绘制所有评价词云图
+all_text = " ".join(text)
+all_mask = plt.imread(r"./all.jpg")
+all_wordcloud = WordCloud(mask=all_mask,background_color='white',font_path='C:/Windows/Fonts/simkai.ttf').generate(all_text)
+plt.imshow(all_wordcloud)
+plt.axis("off")
+plt.title("all Reviews Word Cloud")
+plt.show()
+
+# 对新文本进行情感分析
+new_text = input()
+new_text_vec = vectorizer.transform([new_text])
+sentiment = classifier.predict(new_text_vec)
+if sentiment==0:
+    print(f"新文本的情感倾向: 消极")
+else :
+    print(f"新文本的情感倾向: 积极")
