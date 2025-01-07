@@ -1,0 +1,229 @@
+import jieba
+from matplotlib import pyplot as plt
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.model_selection import train_test_split
+import pandas as pd
+from gensim.corpora.dictionary import Dictionary
+from gensim.models.hdpmodel import HdpModel
+from gensim.utils import simple_preprocess
+from wordcloud import WordCloud
+import tkinter as tk
+from tkinter import messagebox
+import tkinter.font as tkfont
+from tkinter import ttk
+
+data = pd.read_excel("酒店评价.xlsx")
+df = pd.DataFrame(data)
+
+X = df.iloc[1:, 1]
+Y = df.iloc[1:, -1]
+
+
+# 去标点和停用词
+def remove_stopwords(text):
+    with open('stopwords.txt', 'r', encoding='utf-8') as f:
+        stopwords = [line.strip() for line in f.readlines()]
+    # 对句子进行分词
+    words = jieba.cut(text)
+    # 过滤停用词
+    words_without_stopwords = [word for word in words if word not in stopwords]
+    # 重新拼接出句子
+    return " ".join(words_without_stopwords)
+df['text'] = df['text'].apply(remove_stopwords)
+
+
+# 划分训练集和测试集
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=25)
+
+
+# 分词函数
+text = df['text']
+def tokenize_text(text):
+    return jieba.cut(text)
+
+
+# 向量化文本
+vectorizer = TfidfVectorizer(tokenizer=tokenize_text)
+X_train_vec = vectorizer.fit_transform(X_train)
+X_test_vec = vectorizer.transform(X_test)
+
+
+# 训练朴素贝叶斯分类器
+classifier = MultinomialNB()
+classifier.fit(X_train_vec, y_train)
+
+
+# 预测并评估
+y_pred = classifier.predict(X_test_vec)
+accuracy = (y_pred == y_test).mean()
+print(f"准确率: {accuracy}")
+
+
+# 词频统计函数
+def word_frequency_count(texts):
+    word_freq_dict = {}
+    for text in texts:
+        words = jieba.cut(text)
+        for word in words:
+            if word in word_freq_dict:
+                word_freq_dict[word] += 1
+            else:
+                word_freq_dict[word] = 1
+    return word_freq_dict
+
+
+# 对所有文本进行词频统计
+all_texts = df['text'].tolist()
+word_freq_result = word_frequency_count(all_texts)
+
+
+def analyze_topics(texts, num_topics=None):
+    tokenized_texts = [simple_preprocess(text) for text in texts]
+
+    # 创建词典
+    dictionary = Dictionary(tokenized_texts)
+
+    # 将文本转换为词袋模型表示
+    corpus = [dictionary.doc2bow(text) for text in tokenized_texts]
+
+    # 分别筛选出正面和负面情感的文本对应的词袋表示
+    positive_corpus = [corpus[i] for i, label in enumerate(Y) if label == 1]
+    negative_corpus = [corpus[i] for i, label in enumerate(Y) if label == 0]
+
+    # 训练HDP模型
+    hdp_model_positive = HdpModel(positive_corpus, dictionary)
+    hdp_model_negative = HdpModel(negative_corpus, dictionary)
+
+    # 获取正面情感文本的前三个主题关键词
+    positive_topics_keywords = []
+    for topic_id in range(min(3, hdp_model_positive.get_topics().shape[0])):
+        topic_words = hdp_model_positive.show_topic(topic_id, topn=3)
+        positive_topics_keywords.extend([word for word, _ in topic_words])
+    positive_topics_keywords = positive_topics_keywords[:3]
+
+    # 获取负面情感文本的前三个主题关键词
+    negative_topics_keywords = []
+    for topic_id in range(min(3, hdp_model_negative.get_topics().shape[0])):
+        topic_words = hdp_model_negative.show_topic(topic_id, topn=3)
+    negative_topics_keywords.extend([word for word, _ in topic_words])
+    negative_topics_keywords = negative_topics_keywords[:3]
+
+    return positive_topics_keywords, negative_topics_keywords
+
+
+# 调用主题分析函数，传入所有文本数据进行分析
+all_texts = text
+positive_topics_keywords, negative_topics_keywords = analyze_topics(all_texts)
+
+print("正面情感文本的前三个主题关键词：")
+print(positive_topics_keywords)
+
+print("负面情感文本的前三个主题关键词：")
+print(negative_topics_keywords)
+
+
+# 绘制正面评价词云图
+def plot_positive_wordcloud():
+    positive_texts = df[df['label'] == 1]['text']
+    positive_text = " ".join(positive_texts)
+    positive_mask = plt.imread(r"pos.jpg")
+    positive_wordcloud = WordCloud(mask=positive_mask, background_color='white', font_path='C:/Windows/Fonts/simsun.ttc').generate(positive_text)
+    plt.imshow(positive_wordcloud)
+    plt.axis("off")
+    plt.title("Positive Reviews Word Cloud")
+    plt.show()
+
+
+# 绘制负面评价词云图
+def plot_negative_wordcloud():
+    negative_texts = df[df['label'] == 0]['text']
+    negative_text = " ".join(negative_texts)
+    negative_mask = plt.imread(r"neg.jpg")
+    negative_wordcloud = WordCloud(mask=negative_mask, background_color='white', font_path='C:/Windows/Fonts/simsun.ttc').generate(negative_text)
+    plt.imshow(negative_wordcloud)
+    plt.axis("off")
+    plt.title("Negative Reviews Word Cloud")
+    plt.show()
+
+
+# 绘制所有评价词云图
+def plot_all_wordcloud():
+    all_text = " ".join(text)
+    all_mask = plt.imread(r"all.jpg")
+    all_wordcloud = WordCloud(mask=all_mask, background_color='white', font_path='C:/Windows/Fonts/simsun.ttc').generate(all_text)
+    plt.imshow(all_wordcloud)
+    plt.axis("off")
+    plt.title("all Reviews Word Cloud")
+    plt.show()
+
+
+# 创建GUI窗口
+root = tk.Tk()
+root.title("酒店评价分析系统")
+
+# 设置窗口图标
+root.iconbitmap("t.ico")
+
+# 设置窗口大小
+root.geometry("600x400")
+
+# 定义统一字体样式
+custom_font = tkfont.Font(family="Arial", size=12)
+
+# 设置窗口背景颜色
+root.configure(background="#f0f8ff")
+
+# 创建样式对象用于设置按钮样式
+style = ttk.Style()
+style.configure("TButton", foreground="black", background="#e6e6e6", borderwidth=2, relief="solid")
+
+# 输入框用于输入新文本进行情感分析
+input_text = tk.StringVar()
+text_entry = tk.Entry(root, textvariable=input_text, width=50, font=custom_font)
+text_entry.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+# 创建空白分隔Frame
+separator_frame = tk.Frame(root, height=10, bg="gray")
+separator_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=5)
+
+# 按钮用于进行情感分析
+def analyze_sentiment():
+    messagebox.showinfo("提示", "正在处理，请稍候...")
+    new_text = input_text.get()
+    new_text_vec = vectorizer.transform([new_text])
+    sentiment = classifier.predict(new_text_vec)
+    if sentiment == 0:
+        messagebox.showinfo("情感分析结果", "新文本的情感倾向: 消极")
+    else:
+        messagebox.showinfo("情感分析结果", "新文本的情感倾向: 积极")
+
+analyze_button = ttk.Button(root, text="分析情感", command=analyze_sentiment)
+analyze_button.grid(row=2, column=0, padx=10, pady=10)
+
+# 定义鼠标悬停和离开按钮时的样式变化函数
+def on_button_hover(event):
+    style.configure("TButton", foreground="white", background="#d9d9d9")
+
+def on_button_leave(event):
+    style.configure("TButton", foreground="black", background="#e6e6e6")
+
+# 按钮用于展示正面词云图
+positive_button = ttk.Button(root, text="展示正面词云图", command=plot_positive_wordcloud)
+positive_button.grid(row=3, column=0, padx=10, pady=10)
+positive_button.bind("<Enter>", on_button_hover)
+positive_button.bind("<Leave>", on_button_leave)
+
+# 按钮用于展示负面词云图
+negative_button = ttk.Button(root, text="展示负面词云图", command=plot_negative_wordcloud)
+negative_button.grid(row=4, column=0, padx=10, pady=10)
+negative_button.bind("<Enter>", on_button_hover)
+negative_button.bind("<Leave>", on_button_leave)
+
+# 按钮用于展示所有词云图
+all_button = ttk.Button(root, text="展示所有词云图", command=plot_all_wordcloud)
+all_button.grid(row=5, column=0, padx=10, pady=10, columnspan=2)
+all_button.bind("<Enter>", on_button_hover)
+all_button.bind("<Leave>", on_button_leave)
+
+root.mainloop()
